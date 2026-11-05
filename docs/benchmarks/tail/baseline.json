@@ -1,0 +1,12 @@
+{
+  "requests" : [
+    "HEAD \/tail-straggler connection=63080",
+    "\/tail-straggler bytes=0-2359295 active=1 connection=63081",
+    "\/tail-straggler bytes=4718592-7077887 active=2 connection=63082",
+    "\/tail-straggler bytes=2359296-4718591 active=3 connection=63083",
+    "\/tail-straggler bytes=7077888-9437183 active=4 connection=63084"
+  ],
+  "scenario" : "9 MiB file; first request for final range dribbles 64 KiB every 180 ms; other requests unthrottled",
+  "seconds" : 6.4511726668570191,
+  "sha256_verified" : true
+}

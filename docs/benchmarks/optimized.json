@@ -1,0 +1,59 @@
+{
+  "environment" : "Loopback HTTP\/1.1, 80 ms per new TCP connection; 64 MiB at 128 MiB\/s or 2 MiB at 8 MiB\/s per connection; 4 requested workers; 3 runs each; SHA-256 verified",
+  "results" : [
+    {
+      "bytes" : 67108864,
+      "http_requests" : 17,
+      "iteration" : 0,
+      "MiB_per_second" : 170.75654150831878,
+      "scenario" : "large",
+      "seconds" : 0.37480262503959239,
+      "tcp_connections" : 5
+    },
+    {
+      "bytes" : 67108864,
+      "http_requests" : 17,
+      "iteration" : 1,
+      "MiB_per_second" : 178.90169039375238,
+      "scenario" : "large",
+      "seconds" : 0.35773837496526539,
+      "tcp_connections" : 5
+    },
+    {
+      "bytes" : 67108864,
+      "http_requests" : 17,
+      "iteration" : 2,
+      "MiB_per_second" : 174.24936927482574,
+      "scenario" : "large",
+      "seconds" : 0.36728970822878182,
+      "tcp_connections" : 5
+    },
+    {
+      "bytes" : 2097152,
+      "http_requests" : 5,
+      "iteration" : 0,
+      "MiB_per_second" : 8.1434371405267854,
+      "scenario" : "small",
+      "seconds" : 0.24559654179029167,
+      "tcp_connections" : 5
+    },
+    {
+      "bytes" : 2097152,
+      "http_requests" : 5,
+      "iteration" : 1,
+      "MiB_per_second" : 8.1153461159970455,
+      "scenario" : "small",
+      "seconds" : 0.24644666677340865,
+      "tcp_connections" : 5
+    },
+    {
+      "bytes" : 2097152,
+      "http_requests" : 5,
+      "iteration" : 2,
+      "MiB_per_second" : 8.0269182688688065,
+      "scenario" : "small",
+      "seconds" : 0.24916162504814565,
+      "tcp_connections" : 5
+    }
+  ]
+}

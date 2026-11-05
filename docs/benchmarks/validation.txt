@@ -1,0 +1,17 @@
+PASS range boundaries
+PASS URL and filename validation
+PASS parallel byte integrity
+PASS fallback and unsupported HEAD
+PASS malformed range rejected
+PASS destination collision
+PASS saved chunk resume
+PASS cancellation
+PASS changed validator invalidates chunks
+PASS HTTP failure
+PASS retry policy, Retry-After, and permanent failures
+PASS exact-host connection rules
+PASS automatic recovery for files and chunks
+PASS retry budget and cancellation during backoff
+PASS adaptive ranges and small-file integrity
+PASS 1/2/4/8 worker limits and TCP connection reuse
+All 16 checks passed.

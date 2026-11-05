@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-05",
+  "platform": "macOS Apple silicon",
+  "baseline_version": "0.2.0",
+  "optimized_version": "0.3.0",
+  "integrity": "Every benchmark output verified with SHA-256",
+  "baseline_engine_sha256": "fc0b1ee7c18415b1336989861c72403ddadccf8dbf339fd39da50f868668cd77",
+  "optimized_engine_sha256": "4d64d02bcfd62adbe858b2379c76f96b3a0d90fe31637b6f2cb5fd9ff12462ae",
+  "results": [
+    {
+      "scenario": "large",
+      "baseline_median_seconds": 0.6157113332301378,
+      "optimized_median_seconds": 0.3672897082287818,
+      "time_reduction_percent": 40.3470931252945,
+      "baseline_tcp_connections": [
+        17,
+        17,
+        17
+      ],
+      "optimized_tcp_connections": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "small",
+      "baseline_median_seconds": 0.479295416502282,
+      "optimized_median_seconds": 0.24644666677340865,
+      "time_reduction_percent": 48.58146806996739,
+      "baseline_tcp_connections": [
+        2,
+        2,
+        2
+      ],
+      "optimized_tcp_connections": [
+        5,
+        5,
+        5
+      ]
+    }
+  ]
+}

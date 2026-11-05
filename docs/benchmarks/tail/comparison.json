@@ -1,0 +1,9 @@
+{
+  "baseline_version": "0.3.0",
+  "fixed_version": "0.3.1",
+  "baseline_seconds": 6.451172666857019,
+  "fixed_seconds": 2.104663791600615,
+  "time_reduction_percent": 67.37548504300077,
+  "scope": "Single controlled local slow-final-range scenario; not a universal speedup",
+  "sha256_verified": true
+}

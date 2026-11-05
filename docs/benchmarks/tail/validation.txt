@@ -1,0 +1,22 @@
+PASS range boundaries
+PASS URL and filename validation
+PASS parallel byte integrity
+PASS fallback and unsupported HEAD
+PASS malformed range rejected
+PASS destination collision
+PASS saved chunk resume
+PASS cancellation
+PASS changed validator invalidates chunks
+PASS HTTP failure
+PASS retry policy, Retry-After, and permanent failures
+PASS exact-host connection rules
+PASS automatic recovery for files and chunks
+PASS retry budget and cancellation during backoff
+PASS adaptive ranges and small-file integrity
+PASS 1/2/4/8 worker limits and TCP connection reuse
+PASS slow-tail rescue, bounded progress, and losing-copy cancellation
+PASS rescue of a resumed tail without redownloading saved chunks
+PASS cancellation and cleanup of both tail attempts
+PASS malformed tail backup rejection
+PASS single-connection limits and Retry-After during tail recovery
+All 21 checks passed.

@@ -1,0 +1,39 @@
+# Swift build products and machine-specific IDE state
+.build/
+.swiftpm/
+build/
+dist/
+DerivedData/
+*.app/
+*.dSYM/
+*.xcarchive/
+xcuserdata/
+*.xcuserstate
+.DS_Store
+.idea/
+.vscode/
+
+# Local agent configuration, credentials, signing material, and logs
+.agents/
+.codex/
+.aws/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.log
+logs/
+
+# Download state, temporary files, and local captures
+queue.json
+preferences.json
+Parts/
+*.part
+*.resume
+*.resumeData
+*.tmp
+codex-clipboard-*.png
+research/
