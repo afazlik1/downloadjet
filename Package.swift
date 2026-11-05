@@ -5,12 +5,12 @@ let package = Package(
     name: "DownloadJet",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "DownloadJet", targets: ["MacDownloadManager"])
+        .executable(name: "DownloadJet", targets: ["DownloadJet"])
     ],
     targets: [
         .target(name: "DownloadCore"),
         .executableTarget(
-            name: "MacDownloadManager",
+            name: "DownloadJet",
             dependencies: ["DownloadCore"]
         ),
         .executableTarget(

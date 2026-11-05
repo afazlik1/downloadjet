@@ -17,13 +17,14 @@ import DownloadCore
     private var tokens: [UUID: UUID] = [:]
     private var samples: [UUID: (Date, Int64)] = [:]
     private var timer: Timer?
+    private var storageReady = false
     let support: URL
     var defaultDirectory: URL { FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0] }
     init() {
-        // Retain the existing storage folder so the display-name change preserves saved state.
-        support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Current")
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        support = AppStorage.directory(in: applicationSupport)
         do {
-            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+            try AppStorage.prepare(in: applicationSupport)
             let settings = support.appendingPathComponent("preferences.json")
             if FileManager.default.fileExists(atPath: settings.path) {
                 let saved = try JSONDecoder().decode(Preferences.self, from: Data(contentsOf: settings))
@@ -34,10 +35,12 @@ import DownloadCore
                 items = try JSONDecoder().decode([DownloadItem].self, from: Data(contentsOf: file))
                 for i in items.indices where items[i].status == .downloading { items[i].status = .paused }
             }
+            storageReady = true
         } catch { message = "Could not load saved queue: \(error.localizedDescription)" }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Task { @MainActor in self?.pump() } }
     }
     private func savePreferences() {
+        guard storageReady else { return }
         do { try JSONEncoder().encode(Preferences(connections: connections, maxRetries: maxRetries, hostRules: hostRules)).write(to: support.appendingPathComponent("preferences.json"), options: .atomic) }
         catch { message = "Could not save settings: \(error.localizedDescription)" }
     }
@@ -46,10 +49,12 @@ import DownloadCore
         hostRules = (hostRules.filter { $0.host != rule.host } + [rule]).sorted { $0.host < $1.host }
     }
     func save() {
+        guard storageReady else { return }
         do { try JSONEncoder().encode(items).write(to: support.appendingPathComponent("queue.json"), options: .atomic) }
         catch { message = "Could not save queue: \(error.localizedDescription)" }
     }
     func add(text: String, directory: URL, scheduled: Date?) throws {
+        guard storageReady else { throw StorageError.unavailable }
         let urls = try DownloadItem.parseURLs(text)
         for url in urls {
             var item = DownloadItem(url: url, directory: directory, scheduled: scheduled)
@@ -66,11 +71,11 @@ import DownloadCore
     func pump() {
         let now = Date()
         for (id, sample) in samples where now.timeIntervalSince(sample.0) >= 2 { speeds[id] = nil }
-        guard queueRunning else { return }
+        guard storageReady, queueRunning else { return }
         for item in items where tasks.count < 2 && item.status == .queued && (item.scheduled == nil || item.scheduled! <= Date()) { start(item.id) }
     }
     func start(_ id: UUID) {
-        guard tasks[id] == nil, let index = items.firstIndex(where: { $0.id == id }), items[index].status != .completed else { return }
+        guard storageReady, tasks[id] == nil, let index = items.firstIndex(where: { $0.id == id }), items[index].status != .completed else { return }
         items[index].status = .downloading; items[index].error = nil; items[index].scheduled = nil
         let item = items[index], token = UUID()
         let connections = HostConnectionRule.resolve(url: item.url, defaultConnections: connections, rules: hostRules)
@@ -137,5 +142,9 @@ import DownloadCore
         save()
     }
     func shutdown() { queueRunning = false; for id in Array(tasks.keys) { pause(id) }; save() }
+}
+private enum StorageError: LocalizedError {
+    case unavailable
+    var errorDescription: String? { "Saved download data is unavailable. Resolve the startup error and reopen DownloadJet." }
 }
 func bytes(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }

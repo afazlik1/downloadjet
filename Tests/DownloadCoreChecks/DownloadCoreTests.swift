@@ -10,7 +10,7 @@ final class DownloadCoreTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         server = Process(); server.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         server.arguments = ["python3", URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("server.py").path, root.appendingPathComponent("requests.log").path]
-        if benchmark { var environment = ProcessInfo.processInfo.environment; environment["CURRENT_BENCHMARK"] = "1"; server.environment = environment }
+        if benchmark { var environment = ProcessInfo.processInfo.environment; environment["DOWNLOADJET_BENCHMARK"] = "1"; server.environment = environment }
         let pipe = Pipe(); server.standardOutput = pipe; server.standardError = FileHandle.nullDevice
         try server.run()
         let data = pipe.fileHandleForReading.availableData
@@ -20,6 +20,70 @@ final class DownloadCoreTests {
     func tearDownWithError() throws { server?.terminate(); try? FileManager.default.removeItem(at: root) }
     var expected: Data { Data((0..<(9 * 1024 * 1024)).map { UInt8($0 % 256) }) }
     func item(_ path: String) -> DownloadItem { DownloadItem(url: base.appendingPathComponent(path), directory: root.appendingPathComponent("output")) }
+    func testFreshStorage() throws {
+        let applicationSupport = root.appendingPathComponent("Application Support")
+        let directory = try AppStorage.prepare(in: applicationSupport)
+        XCTAssertEqual(directory.lastPathComponent, "DownloadJet")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
+        XCTAssertEqual(try AppStorage.prepare(in: applicationSupport), directory)
+    }
+    func testStorageMigrationAndResume() async throws {
+        let applicationSupport = root.appendingPathComponent("Application Support")
+        let legacy = applicationSupport.appendingPathComponent("Current")
+        var item = item("range"); item.status = .paused
+        let parts = legacy.appendingPathComponent("Parts").appendingPathComponent(item.id.uuidString)
+        try FileManager.default.createDirectory(at: parts, withIntermediateDirectories: true)
+        let queue = try JSONEncoder().encode([item])
+        let preferences = Data(#"{"connections":8,"maxRetries":5,"hostRules":[]}"#.utf8)
+        try queue.write(to: legacy.appendingPathComponent("queue.json"))
+        try preferences.write(to: legacy.appendingPathComponent("preferences.json"))
+        let manifest: [String: Any] = ["url": item.url.absoluteString, "length": expected.count, "validator": "\"version-1\"", "chunkSize": 4 * 1024 * 1024]
+        try JSONSerialization.data(withJSONObject: manifest).write(to: parts.appendingPathComponent("manifest.json"))
+        try expected.prefix(4 * 1024 * 1024).write(to: parts.appendingPathComponent("0.part"))
+
+        let directory = try AppStorage.prepare(in: applicationSupport)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("queue.json")), queue)
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("preferences.json")), preferences)
+        let restored = try JSONDecoder().decode([DownloadItem].self, from: Data(contentsOf: directory.appendingPathComponent("queue.json")))
+        XCTAssertEqual(restored.first?.id, item.id)
+        XCTAssertEqual(restored.first?.status, .paused)
+        XCTAssertEqual(restored.first?.directory, item.directory)
+        XCTAssertEqual(try AppStorage.prepare(in: applicationSupport), directory)
+        let cache = directory.appendingPathComponent("Parts").appendingPathComponent(item.id.uuidString)
+        try await Transfer.run(item: item, cache: cache) { _, _ in }
+        XCTAssertEqual(try Data(contentsOf: item.destination), expected)
+        let log = try String(contentsOf: root.appendingPathComponent("requests.log"), encoding: .utf8)
+        XCTAssertFalse(log.contains("bytes=0-4194303"))
+    }
+    func testExistingStorageIsNotOverwritten() throws {
+        let legacy = root.appendingPathComponent("Current")
+        let destination = AppStorage.directory(in: root)
+        for directory in [legacy, destination] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        try Data("older queue".utf8).write(to: legacy.appendingPathComponent("queue.json"))
+        try Data("new queue".utf8).write(to: destination.appendingPathComponent("queue.json"))
+        try Data("legacy only".utf8).write(to: legacy.appendingPathComponent("preferences.json"))
+        XCTAssertEqual(try AppStorage.prepare(in: root), destination)
+        XCTAssertEqual(try String(contentsOf: destination.appendingPathComponent("queue.json"), encoding: .utf8), "new queue")
+        XCTAssertEqual(try String(contentsOf: legacy.appendingPathComponent("queue.json"), encoding: .utf8), "older queue")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.appendingPathComponent("preferences.json").path))
+    }
+    func testBlockedStorageMigrationRetainsData() throws {
+        let legacy = root.appendingPathComponent("Current")
+        let destination = AppStorage.directory(in: root)
+        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+        try Data("keep queue".utf8).write(to: legacy.appendingPathComponent("queue.json"))
+        try Data("blocking file".utf8).write(to: destination)
+        XCTAssertThrowsError(try AppStorage.prepare(in: root))
+        XCTAssertEqual(try String(contentsOf: legacy.appendingPathComponent("queue.json"), encoding: .utf8), "keep queue")
+        XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "blocking file")
+        try FileManager.default.removeItem(at: destination)
+        try FileManager.default.removeItem(at: legacy)
+        try Data("invalid store".utf8).write(to: legacy)
+        XCTAssertThrowsError(try AppStorage.prepare(in: root))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertEqual(try String(contentsOf: legacy, encoding: .utf8), "invalid store")
+    }
     func testRangeBoundaries() {
         XCTAssertEqual(Transfer.ranges(length: 10, chunkSize: 4), [0...3, 4...7, 8...9])
         XCTAssertTrue(Transfer.ranges(length: 0, chunkSize: 4).isEmpty)
@@ -268,6 +332,10 @@ private func XCTAssertThrowsError<T>(_ expression: @autoclosure () throws -> T) 
             try FileManager.default.removeItem(at: suite.root)
             try FileManager.default.createDirectory(at: suite.root, withIntermediateDirectories: true)
         }
+        try reset(); try suite.testFreshStorage(); print("PASS fresh DownloadJet storage and repeated startup")
+        try reset(); try await suite.testStorageMigrationAndResume(); print("PASS storage migration preserves queue, settings, and resumable chunks")
+        try reset(); try suite.testExistingStorageIsNotOverwritten(); print("PASS existing DownloadJet data is never merged or overwritten")
+        try reset(); try suite.testBlockedStorageMigrationRetainsData(); print("PASS blocked storage migration retains original data")
         try reset(); try await suite.testOrdinaryAndUnsupportedHEADDownloads(); print("PASS fallback and unsupported HEAD")
         try reset(); try await suite.testInvalidRangeDoesNotPublishFile(); print("PASS malformed range rejected")
         try reset(); try await suite.testDestinationIsNeverOverwritten(); print("PASS destination collision")
@@ -286,7 +354,7 @@ private func XCTAssertThrowsError<T>(_ expression: @autoclosure () throws -> T) 
         try reset(); try await suite.testTailCancellationAndCleanup(); print("PASS cancellation and cleanup of both tail attempts")
         try reset(); try await suite.testInvalidTailBackupRejected(); print("PASS malformed tail backup rejection")
         try reset(); try await suite.testSingleConnectionAndRetryAfterRespected(); print("PASS single-connection limits and Retry-After during tail recovery")
-        print("All 21 checks passed.")
+        print("All 25 checks passed.")
     }
 }
 

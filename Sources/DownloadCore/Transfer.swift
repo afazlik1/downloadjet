@@ -289,7 +289,7 @@ public enum Transfer {
             try await downloadRanges(item: item, cache: cache, ranges: ranges, pending: pending, pool: pool, connections: connections, validator: validator, length: length, counter: counter, retryPolicy: retryPolicy, tailRecovery: tailRecovery, phase: phase, retrying: retrying)
             try Task.checkCancellation()
             await phase(.assembling)
-            let assembled = item.directory.appendingPathComponent(".current-\(item.id).tmp")
+            let assembled = item.directory.appendingPathComponent(".downloadjet-\(item.id).tmp")
             defer { try? fm.removeItem(at: assembled) }
             fm.createFile(atPath: assembled.path, contents: nil)
             let output = try FileHandle(forWritingTo: assembled)
@@ -304,7 +304,7 @@ public enum Transfer {
             } catch { try? output.close(); throw error }
             try fm.moveItem(at: assembled, to: item.destination)
         } else {
-            let staging = item.directory.appendingPathComponent(".current-\(item.id).tmp")
+            let staging = item.directory.appendingPathComponent(".downloadjet-\(item.id).tmp")
             try? fm.removeItem(at: staging)
             defer { try? fm.removeItem(at: staging) }
             let (file, response) = try await download(URLRequest(url: item.url), output: staging, pool: pool, policy: retryPolicy, retrying: retrying) { bytes in Task { await progress(bytes, max(0, length)) } }

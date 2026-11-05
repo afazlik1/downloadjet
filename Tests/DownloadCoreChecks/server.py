@@ -4,7 +4,7 @@ COUNTS = {}
 ACTIVE = {}
 LOCK = threading.Lock()
 PAYLOAD = bytes(range(256)) * (36 * 1024)  # 9 MiB, deterministic
-BENCHMARK = os.environ.get('CURRENT_BENCHMARK') == '1'
+BENCHMARK = os.environ.get('DOWNLOADJET_BENCHMARK') == '1'
 LARGE = bytes(range(256)) * (256 * 1024) if BENCHMARK else PAYLOAD
 SMALL = bytes(range(256)) * (8 * 1024)
 TAIL_PAYLOAD = b''.join(hashlib.sha256(str(i).encode()).digest() * 2048 for i in range(144))

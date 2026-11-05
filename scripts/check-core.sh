@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-cache_dir="${DOWNLOADJET_BUILD_DIR:-${CURRENT_BUILD_DIR:-$PWD/.build}}"
+cache_dir="${DOWNLOADJET_BUILD_DIR:-$PWD/.build}"
 mkdir -p "$cache_dir"
 cache_dir="$(cd "$cache_dir" && pwd)"
 export CLANG_MODULE_CACHE_PATH="$cache_dir/clang"

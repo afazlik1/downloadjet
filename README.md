@@ -34,7 +34,7 @@ Use **Cmd+N** to add links. Settings controls connection defaults, retries, and 
 
 ## Data and privacy
 
-Queue and preference data are stored locally in `~/Library/Application Support/Current/`; this legacy folder is retained so downloads and settings from earlier releases named Current or IDM remain available in DownloadJet. Completed chunks are in its `Parts` directory. Completed downloads are saved in the selected folder, which defaults to Downloads.
+Queue and preference data are stored locally in `~/Library/Application Support/DownloadJet/`. On first launch after updating, the app automatically moves its earlier storage folder, preserving the queue, settings, and completed chunks. If a DownloadJet folder already exists, it is used without merging or overwriting older data. Completed chunks are in its `Parts` directory. Completed downloads are saved in the selected folder, which defaults to Downloads.
 
 Saved URLs may contain private query parameters. Queue data is unencrypted and should not be shared or committed. Local state, partial files, credentials, agent configuration, and generated outputs are ignored by Git. Removing a stopped queue item clears its partial chunks and retains finished output files.
 
@@ -56,11 +56,11 @@ Python 3 must be available on `PATH` for the local HTTP fixture.
 ./scripts/check-core.sh --tail-benchmark
 ```
 
-The standalone check executable works with Command Line Tools and does not require XCTest. Its 21 check groups cover exact file integrity, saved-chunk resume, unsupported HEAD, malformed responses, collisions, cancellation, retries/backoff, worker limits, connection reuse, adaptive ranges, and slow-tail recovery/cleanup.
+The standalone check executable works with Command Line Tools and does not require XCTest. Its 25 check groups cover storage migration and preservation, exact file integrity, saved-chunk resume, unsupported HEAD, malformed responses, collisions, cancellation, retries/backoff, worker limits, connection reuse, adaptive ranges, and slow-tail recovery/cleanup.
 
 [Benchmark results and conditions](docs/benchmarks/README.md) include simulated connection-limited workloads. The [slow-tail regression](docs/benchmarks/tail/README.md) reproduces one slow final request. These local measurements are not Internet speed guarantees.
 
-Set `DOWNLOADJET_BUILD_DIR` to an alternate build-cache directory when needed. The default is `.build/`; the earlier `CURRENT_BUILD_DIR` variable is also supported. The build generates macOS icon sizes from `assets/AppIcon.png`.
+Set `DOWNLOADJET_BUILD_DIR` to an alternate build-cache directory when needed. The default is `.build/`. The build generates macOS icon sizes from `assets/AppIcon.png`.
 
 ## Research
 
