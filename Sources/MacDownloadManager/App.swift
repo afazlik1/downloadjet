@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) { MainActor.assumeIsolated { store?.shutdown() } }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
-@main struct IDMApp: App {
+@main struct DownloadJetApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = DownloadStore()
     @ViewState<Bool> private var showingAdd = false
@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainView(showingAdd: $showingAdd).environmentObject(store)
                 .onAppear { delegate.store = store }
                 .sheet(isPresented: $showingAdd) { AddDownloadView().environmentObject(store) }
-                .alert("IDM", isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button("OK") { store.message = nil } } message: { Text(store.message ?? "") }
+                .alert("DownloadJet", isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button("OK") { store.message = nil } } message: { Text(store.message ?? "") }
         }
         .defaultSize(width: 1120, height: 720)
         .commands {
@@ -49,7 +49,7 @@ struct MainView: View {
                 Section("LIBRARY") { ForEach(filters, id: \.self) { name in Label(name, systemImage: icon(name)).tag(name) } }
                 Section("FILE TYPES") { ForEach(categories, id: \.self) { name in Label(name, systemImage: icon(name)).tag(name) } }
             }
-            .navigationTitle("IDM")
+            .navigationTitle("DownloadJet")
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Made for your Mac", systemImage: "desktopcomputer").font(.caption.weight(.medium))
@@ -181,7 +181,7 @@ struct AddDownloadView: View {
             }
             Toggle("Schedule for later", isOn: $schedule)
             if schedule { DatePicker("Start at", selection: $date, in: Date()...) }
-            Text("Completed chunks are kept when paused. Servers without safe range support restart on resume. Scheduled downloads run while IDM is open and your Mac is awake.").font(.caption).foregroundStyle(.secondary)
+            Text("Completed chunks are kept when paused. Servers without safe range support restart on resume. Scheduled downloads run while DownloadJet is open and your Mac is awake.").font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).font(.caption) }
             HStack {
                 Button("Paste Links") { if let value = NSPasteboard.general.string(forType: .string) { text = value } }

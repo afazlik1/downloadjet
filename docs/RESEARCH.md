@@ -1,6 +1,6 @@
 # Research and implementation notes
 
-IDM is an independent implementation informed by public product documentation and validated with local HTTP fixtures. No IDM Windows executable was decompiled or run, and no proprietary IDM source code was used.
+DownloadJet is an independent implementation informed by public product documentation and validated with local HTTP fixtures. No IDM Windows executable was decompiled or run, and no proprietary IDM source code was used.
 
 ## References
 
@@ -15,7 +15,7 @@ REA-assisted browser observations confirmed what those public help pages describ
 
 ## Independent engineering choices
 
-IDM uses a fixed-range worker pool with adaptive 256 KiB–4 MiB ranges, rather than claiming to reproduce IDM's proprietary dynamic segmentation algorithm. A transfer-owned URLSession supports connection reuse; bounded buffers assemble validated chunks on disk.
+DownloadJet uses a fixed-range worker pool with adaptive 256 KiB–4 MiB ranges, rather than claiming to reproduce IDM's proprietary dynamic segmentation algorithm. A transfer-owned URLSession supports connection reuse; bounded buffers assemble validated chunks on disk.
 
 Completed chunks are retained with a resource validator and compatible manifest layout. Temporary failures use a bounded per-request retry budget, exponential backoff, and Retry-After handling. These policies are independent choices, not a claim of identical IDM behavior.
 
