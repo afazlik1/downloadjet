@@ -20,6 +20,7 @@ import DownloadCore
     let support: URL
     var defaultDirectory: URL { FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0] }
     init() {
+        // Retain the existing storage folder so the display-name change preserves saved state.
         support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Current")
         do {
             try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)

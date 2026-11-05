@@ -1,6 +1,6 @@
-# Current — Internet Download Manager for macOS
+# IDM — Internet Download Manager for macOS
 
-Current is an independent native macOS download manager built with SwiftUI. It provides parallel HTTP downloads, resumable queues, scheduling, and automatic recovery inspired by Internet Download Manager's documented workflows.
+IDM is an independent native macOS download manager built with SwiftUI. It provides parallel HTTP downloads, resumable queues, scheduling, and automatic recovery inspired by Internet Download Manager's documented workflows.
 
 This project is not affiliated with Internet Download Manager or Tonec. It is an independent Swift implementation; it does not use IDM's proprietary source code or Windows executable. The icon is based on artwork supplied for the project.
 
@@ -12,10 +12,10 @@ Requires macOS 14 or later, Swift 6 or later, and Apple's Command Line Tools or 
 git clone https://github.com/afazlik1/internet-download-manager-for-macOS.git
 cd internet-download-manager-for-macOS
 ./scripts/build-app.sh
-open dist/Current.app
+open dist/IDM.app
 ```
 
-Double-click `Current.app` to launch it. To install locally, drag it from `dist` into Applications, then add it to the Dock if desired. The build also creates `dist/Current-macOS.zip`.
+Double-click `IDM.app` to launch it. To install locally, drag it from `dist` into Applications, then add it to the Dock if desired. The build also creates `dist/IDM-macOS.zip`.
 
 The app is ad-hoc signed and built for the current machine's architecture. Public binary distribution requires an appropriate Developer ID signing and notarization workflow. This repository contains source and assets; generated app bundles, archives, and build caches are excluded from Git.
 
@@ -34,7 +34,7 @@ Use **Cmd+N** to add links. Settings controls connection defaults, retries, and 
 
 ## Data and privacy
 
-Queue and preference data are stored locally in `~/Library/Application Support/Current/`; completed chunks are in its `Parts` directory. Completed downloads are saved in the selected folder, which defaults to Downloads.
+Queue and preference data are stored locally in `~/Library/Application Support/Current/`; this legacy folder is retained so downloads and settings from releases named Current remain available after renaming the app to IDM. Completed chunks are in its `Parts` directory. Completed downloads are saved in the selected folder, which defaults to Downloads.
 
 Saved URLs may contain private query parameters. Queue data is unencrypted and should not be shared or committed. Local state, partial files, credentials, agent configuration, and generated outputs are ignored by Git. Removing a stopped queue item clears its partial chunks and retains finished output files.
 
@@ -64,4 +64,4 @@ Set `CURRENT_BUILD_DIR` to an alternate build-cache directory when needed. The d
 
 ## Research
 
-[Research notes](docs/RESEARCH.md) describe the public documentation and REA-assisted website observations that informed the app. REA is optional development tooling and is not needed to build or run Current.
+[Research notes](docs/RESEARCH.md) describe the public documentation and REA-assisted website observations that informed the app. REA is optional development tooling and is not needed to build or run IDM.

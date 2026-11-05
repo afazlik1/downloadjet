@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "Current",
+    name: "IDM",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Current", targets: ["MacDownloadManager"])
+        .executable(name: "IDM", targets: ["MacDownloadManager"])
     ],
     targets: [
         .target(name: "DownloadCore"),
