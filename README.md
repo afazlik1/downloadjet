@@ -9,7 +9,7 @@ This project is not affiliated with Internet Download Manager or Tonec. It is an
 Requires macOS 14 or later, Swift 6 or later, and Apple's Command Line Tools or Xcode. There are no third-party Swift package dependencies.
 
 ```sh
-git clone https://github.com/afazlik1/internet-download-manager-for-macOS.git downloadjet
+git clone https://github.com/afazlik1/downloadjet.git
 cd downloadjet
 ./scripts/build-app.sh
 open dist/DownloadJet.app
