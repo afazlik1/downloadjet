@@ -68,9 +68,10 @@ struct MainView: View {
                     Button { showingAdd = true } label: { Label("Add URL", systemImage: "plus") }.buttonStyle(.borderedProminent).controlSize(.large)
                 }.padding(26)
                 HStack(spacing: 16) {
-                    stat("TRANSFER SPEED", bytes(Int64(store.speeds.values.reduce(0, +))) + "/s", "arrow.down.circle.fill", .blue)
+                    stat("TRANSFER SPEED", bytes(Int64(store.totalSpeed)) + "/s", "arrow.down.circle.fill", .blue)
                     stat("COMPLETED", "\(store.items.filter { $0.status == .completed }.count) files", "checkmark.circle.fill", .green)
                     stat("IN QUEUE", "\(store.items.filter { $0.status == .queued }.count) files", "clock.fill", .orange)
+                    SpeedHistoryView(samples: store.speedHistory, speed: store.totalSpeed)
                 }.padding(.horizontal, 26).padding(.bottom, 22)
                 Divider()
                 if visible.isEmpty {

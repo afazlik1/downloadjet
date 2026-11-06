@@ -7,6 +7,8 @@ import DownloadCore
     @Published var message: String?
     @Published var queueRunning = true
     @Published var speeds: [UUID: Double] = [:]
+    @Published private(set) var totalSpeed: Double = 0
+    @Published private(set) var speedHistory: [DownloadSpeedSample] = []
     @Published var connections = 4 { didSet { savePreferences() } }
     @Published var maxRetries = 3 { didSet { savePreferences() } }
     @Published var hostRules: [HostConnectionRule] = [] { didSet { savePreferences() } }
@@ -15,13 +17,15 @@ import DownloadCore
     private struct Preferences: Codable { var connections: Int; var maxRetries: Int; var hostRules: [HostConnectionRule] }
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var tokens: [UUID: UUID] = [:]
-    private var samples: [UUID: (Date, Int64)] = [:]
+    private let networkBytes = ReceivedByteCounter()
+    private var speedMeter = DownloadSpeedHistory(now: ProcessInfo.processInfo.systemUptime)
     private var timer: Timer?
     private var storageReady = false
     let support: URL
     var defaultDirectory: URL { FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0] }
     init(applicationSupport: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0], automaticallySchedule: Bool = true) {
         support = AppStorage.directory(in: applicationSupport)
+        speedHistory = speedMeter.samples
         do {
             try AppStorage.prepare(in: applicationSupport)
             let settings = support.appendingPathComponent("preferences.json")
@@ -37,8 +41,20 @@ import DownloadCore
             storageReady = true
         } catch { message = "Could not load saved queue: \(error.localizedDescription)" }
         if automaticallySchedule {
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Task { @MainActor in self?.pump() } }
+            let timer = Timer(timeInterval: DownloadSpeedHistory.interval, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.sampleSpeed(); self?.pump() }
+            }
+            timer.tolerance = 0.025
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
         }
+    }
+    func sampleSpeed() {
+        for (id, bytes) in networkBytes.take() { speedMeter.record(bytes, for: id) }
+        speedMeter.sample(at: ProcessInfo.processInfo.systemUptime)
+        speeds = speedMeter.speeds
+        totalSpeed = speedMeter.totalSpeed
+        speedHistory = speedMeter.samples
     }
     private func savePreferences() {
         guard storageReady else { return }
@@ -72,9 +88,8 @@ import DownloadCore
     }
     func pump() {
         let now = Date()
-        for (id, sample) in samples where now.timeIntervalSince(sample.0) >= 2 { speeds[id] = nil }
         guard storageReady, queueRunning else { return }
-        for item in items where tasks.count < 2 && item.status == .queued && (item.scheduled == nil || item.scheduled! <= Date()) { start(item.id) }
+        for item in items where tasks.count < 2 && item.status == .queued && (item.scheduled == nil || item.scheduled! <= now) { start(item.id) }
     }
     func start(_ id: UUID) {
         guard storageReady, tasks[id] == nil, let index = items.firstIndex(where: { $0.id == id }), items[index].status != .completed else { return }
@@ -82,13 +97,16 @@ import DownloadCore
         let item = items[index], token = UUID()
         let connections = HostConnectionRule.resolve(url: item.url, defaultConnections: connections, rules: hostRules)
         let retryPolicy = RetryPolicy(maxRetries: maxRetries)
-        tokens[id] = token; samples[id] = nil
+        tokens[id] = token
+        let networkBytes = networkBytes
         let cache = support.appendingPathComponent("Parts").appendingPathComponent(id.uuidString)
         tasks[id] = Task {
             do {
                 try await Transfer.run(item: item, cache: cache, connections: connections, phase: { [self] phase in
                     await setPhase(id, token: token, phase: phase)
-                }, retryPolicy: retryPolicy, retrying: { [self] attempt, delay in
+                }, retryPolicy: retryPolicy, receivedBytes: { count in
+                    networkBytes.record(count, for: id)
+                }, retrying: { [self] attempt, delay in
                     await reportRecovery(id, token: token, attempt: attempt, delay: delay)
                 }, progress: { [self] received, total in
                     await update(id, token: token, received: received, total: total)
@@ -107,22 +125,17 @@ import DownloadCore
     private func setPhase(_ id: UUID, token: UUID, phase: TransferPhase) {
         guard tokens[id] == token, items.first(where: { $0.id == id })?.status == .downloading else { return }
         phases[id] = phase
-        if phase == .assembling { speeds[id] = nil; samples[id] = nil; recoveryMessages[id] = nil }
+        if phase == .assembling { speeds[id] = nil; recoveryMessages[id] = nil }
     }
     private func reportRecovery(_ id: UUID, token: UUID, attempt: Int, delay: TimeInterval) {
         guard tokens[id] == token, items.first(where: { $0.id == id })?.status == .downloading else { return }
         recoveryMessages[id] = "Retry \(attempt) in \(Int(ceil(delay)))s · temporary connection or server problem"
-        speeds[id] = nil; samples[id] = nil
+        speeds[id] = nil
     }
     private func update(_ id: UUID, token: UUID, received: Int64, total: Int64) {
         guard tokens[id] == token, let i = items.firstIndex(where: { $0.id == id }), items[i].status == .downloading else { return }
         if received > items[i].received { recoveryMessages[id] = nil }
         items[i].received = received; items[i].total = total
-        guard phases[id] != .assembling else { return }
-        let now = Date()
-        if let (time, bytes) = samples[id], now.timeIntervalSince(time) >= 0.5 {
-            speeds[id] = max(0, Double(received - bytes) / now.timeIntervalSince(time)); samples[id] = (now, received)
-        } else if samples[id] == nil { samples[id] = (now, received) }
     }
     func pause(_ id: UUID) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
@@ -144,6 +157,22 @@ import DownloadCore
         save()
     }
     func shutdown() { queueRunning = false; for id in Array(tasks.keys) { pause(id) }; save() }
+}
+// Delegate callbacks add bytes without publishing UI updates for every packet.
+private final class ReceivedByteCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending: [UUID: Int64] = [:]
+    func record(_ bytes: Int64, for id: UUID) {
+        guard bytes > 0 else { return }
+        lock.lock(); defer { lock.unlock() }
+        pending[id, default: 0] += bytes
+    }
+    func take() -> [UUID: Int64] {
+        lock.lock(); defer { lock.unlock() }
+        let result = pending
+        pending.removeAll(keepingCapacity: true)
+        return result
+    }
 }
 private enum StorageError: LocalizedError {
     case unavailable

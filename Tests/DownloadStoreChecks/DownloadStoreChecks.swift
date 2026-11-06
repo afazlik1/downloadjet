@@ -54,12 +54,23 @@ import DownloadCore
         precondition(!requests.contains("/range"), "Starting one download started another saved link")
         print("PASS Start Download completes only the selected saved item with exact file bytes")
 
+        restored.sampleSpeed()
+        precondition(restored.totalSpeed > 0 && restored.speedHistory.last?.bytesPerSecond == restored.totalSpeed)
+        precondition(restored.speeds[first.id] == restored.totalSpeed)
+        let peak = restored.totalSpeed
+        try await Task.sleep(nanoseconds: 550_000_000)
+        restored.sampleSpeed()
+        precondition(restored.totalSpeed == 0 && restored.speeds.isEmpty)
+        precondition(restored.speedHistory.contains { $0.bytesPerSecond == peak })
+        precondition(restored.speedHistory.count <= 61)
+        print("PASS live network speed updates from received bytes and drops to zero while idle")
+
         restored.remove(restored.items[1].id)
         restored.shutdown()
         let final = DownloadStore(applicationSupport: applicationSupport, automaticallySchedule: false)
         precondition(final.items.count == 1 && final.items[0].status == .completed)
         final.shutdown()
         print("PASS removing a saved link persists without starting it")
-        print("All 4 download-store checks passed.")
+        print("All 5 download-store checks passed.")
     }
 }

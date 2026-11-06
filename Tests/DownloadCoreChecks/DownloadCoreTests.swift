@@ -84,6 +84,36 @@ final class DownloadCoreTests {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
         XCTAssertEqual(try String(contentsOf: legacy, encoding: .utf8), "invalid store")
     }
+    func testSpeedHistory() {
+        let first = UUID(), second = UUID()
+        var history = DownloadSpeedHistory(now: 100)
+        XCTAssertEqual(history.samples.count, 61)
+        XCTAssertEqual(history.samples.first?.time, 70)
+        history.record(1024, for: first); history.record(2048, for: second)
+        history.record(-100, for: first)
+        history.sample(at: 100.5)
+        XCTAssertEqual(history.totalSpeed, 6144)
+        XCTAssertEqual(history.speeds[first], 2048)
+        XCTAssertEqual(history.speeds[second], 4096)
+        history.sample(at: 101)
+        XCTAssertEqual(history.totalSpeed, 0)
+        XCTAssertTrue(history.speeds.isEmpty)
+        XCTAssertTrue(history.samples.contains { $0.bytesPerSecond == 6144 })
+        history.record(1024, for: first)
+        history.sample(at: 102) // Delayed timers use real elapsed time, not a fixed divisor.
+        XCTAssertEqual(history.totalSpeed, 1024)
+        for tick in 1...70 { history.sample(at: 102 + Double(tick) * 0.5) }
+        XCTAssertEqual(history.samples.count, 61)
+        XCTAssertEqual(history.samples.first?.time, 107)
+        XCTAssertEqual(history.samples.last?.time, 137)
+        XCTAssertTrue(history.samples.allSatisfy { $0.bytesPerSecond == 0 })
+        history.sample(at: 200) // A long idle gap expires all old measurements.
+        XCTAssertTrue(history.samples.allSatisfy { $0.time >= 170 })
+        history.record(1000, for: first)
+        history.sample(at: 199); history.sample(at: 200)
+        history.sample(at: 200.5)
+        XCTAssertEqual(history.totalSpeed, 2000)
+    }
     func testRangeBoundaries() {
         XCTAssertEqual(Transfer.ranges(length: 10, chunkSize: 4), [0...3, 4...7, 8...9])
         XCTAssertTrue(Transfer.ranges(length: 0, chunkSize: 4).isEmpty)
@@ -96,14 +126,18 @@ final class DownloadCoreTests {
     }
     func testParallelDownloadIsByteExact() async throws {
         let item = item("range")
-        try await Transfer.run(item: item, cache: root.appendingPathComponent("cache")) { _, _ in }
+        let network = NetworkByteCounter()
+        try await Transfer.run(item: item, cache: root.appendingPathComponent("cache"), receivedBytes: { network.add($0) }) { _, _ in }
         XCTAssertEqual(try Data(contentsOf: item.destination), expected)
+        XCTAssertEqual(network.total, Int64(expected.count))
     }
     func testOrdinaryAndUnsupportedHEADDownloads() async throws {
         for path in ["plain", "nohead"] {
             let item = item(path)
-            try await Transfer.run(item: item, cache: root.appendingPathComponent(path)) { _, _ in }
+            let network = NetworkByteCounter()
+            try await Transfer.run(item: item, cache: root.appendingPathComponent(path), receivedBytes: { network.add($0) }) { _, _ in }
             XCTAssertEqual(try Data(contentsOf: item.destination), expected)
+            XCTAssertEqual(network.total, Int64(expected.count))
         }
     }
     func testInvalidRangeDoesNotPublishFile() async throws {
@@ -124,8 +158,10 @@ final class DownloadCoreTests {
         let manifest: [String: Any] = ["url": item.url.absoluteString, "length": 9 * 1024 * 1024, "validator": "\"version-1\"", "chunkSize": 4 * 1024 * 1024]
         try JSONSerialization.data(withJSONObject: manifest).write(to: cache.appendingPathComponent("manifest.json"))
         try expected.prefix(4 * 1024 * 1024).write(to: cache.appendingPathComponent("0.part"))
-        try await Transfer.run(item: item, cache: cache) { _, _ in }
+        let network = NetworkByteCounter()
+        try await Transfer.run(item: item, cache: cache, receivedBytes: { network.add($0) }) { _, _ in }
         XCTAssertEqual(try Data(contentsOf: item.destination), expected)
+        XCTAssertEqual(network.total, Int64(expected.count - 4 * 1024 * 1024))
         let log = try String(contentsOf: root.appendingPathComponent("requests.log"), encoding: .utf8)
         XCTAssertFalse(log.contains("bytes=0-4194303"))
     }
@@ -325,6 +361,7 @@ private func XCTAssertThrowsError<T>(_ expression: @autoclosure () throws -> T) 
         try suite.setUpWithError()
         defer { try? suite.tearDownWithError() }
         suite.testRangeBoundaries(); print("PASS range boundaries")
+        suite.testSpeedHistory(); print("PASS half-second speed sampling, aggregation, idle decay, and 30-second history")
         try suite.testURLValidationAndFilenames(); print("PASS URL and filename validation")
         try await suite.testParallelDownloadIsByteExact(); print("PASS parallel byte integrity")
         // Give each test a fresh destination/cache while retaining the fixture server.
@@ -354,7 +391,7 @@ private func XCTAssertThrowsError<T>(_ expression: @autoclosure () throws -> T) 
         try reset(); try await suite.testTailCancellationAndCleanup(); print("PASS cancellation and cleanup of both tail attempts")
         try reset(); try await suite.testInvalidTailBackupRejected(); print("PASS malformed tail backup rejection")
         try reset(); try await suite.testSingleConnectionAndRetryAfterRespected(); print("PASS single-connection limits and Retry-After during tail recovery")
-        print("All 25 checks passed.")
+        print("All 26 checks passed.")
     }
 }
 
@@ -364,4 +401,11 @@ private actor TransferRecorder {
     func phase(_ value: TransferPhase) { phases.append(value) }
     func progress(_ received: Int64, _ total: Int64) { progress.append((received, total)) }
     func snapshot() -> (phases: [TransferPhase], progress: [(Int64, Int64)]) { (phases, progress) }
+}
+
+private final class NetworkByteCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bytes: Int64 = 0
+    func add(_ count: Int64) { lock.lock(); bytes += count; lock.unlock() }
+    var total: Int64 { lock.lock(); defer { lock.unlock() }; return bytes }
 }

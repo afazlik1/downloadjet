@@ -28,6 +28,7 @@ The app is ad-hoc signed and built for the current machine's architecture. Publi
 - Validated range boundaries and lengths, If-Range checks, and destination collision protection.
 - Bounded automatic retries for temporary network failures and HTTP 408/429/500/502/503/504, with exponential backoff and Retry-After support capped at five minutes.
 - Slow final-range recovery using an idle worker and at most one backup per range. The first fully validated copy wins; the other is cancelled. One-worker limits and requests in retry backoff are respected.
+- A compact live speed chart in the upper-right summary area shows combined network throughput for the last 30 seconds, sampled every 0.5 seconds. Retry traffic is included; cached chunks and disk assembly are excluded.
 - Batch URL entry, folder selection, per-file scheduling, categories, search, Finder reveal, native light/dark appearance, and transfer/recovery/assembly status.
 - **Download Later** saves links without starting any requests. Saved links persist across launches in the Download Later section; use **Start Download** on a row or its context menu to start one. Resume All leaves these links stopped.
 
@@ -57,9 +58,9 @@ Python 3 must be available on `PATH` for the local HTTP fixture.
 ./scripts/check-core.sh --tail-benchmark
 ```
 
-The standalone check executable works with Command Line Tools and does not require XCTest. Its 25 check groups cover storage migration and preservation, exact file integrity, saved-chunk resume, unsupported HEAD, malformed responses, collisions, cancellation, retries/backoff, worker limits, connection reuse, adaptive ranges, and slow-tail recovery/cleanup.
+The standalone check executable works with Command Line Tools and does not require XCTest. Its 26 check groups cover storage migration and preservation, exact file integrity, saved-chunk resume, unsupported HEAD, malformed responses, collisions, cancellation, retries/backoff, worker limits, connection reuse, adaptive ranges, and slow-tail recovery/cleanup.
 
-The default check command also compiles the app's real download store into an isolated harness. Four additional checks verify that saved links make no requests, survive relaunch and queue controls, start individually with exact file bytes, and can be removed without downloading.
+The default check command also compiles the app's real download store into an isolated harness. Five additional checks verify that saved links make no requests, survive relaunch and queue controls, start individually with exact file bytes, can be removed without downloading, and report live network speed with idle decay.
 
 [Benchmark results and conditions](docs/benchmarks/README.md) include simulated connection-limited workloads. The [slow-tail regression](docs/benchmarks/tail/README.md) reproduces one slow final request. These local measurements are not Internet speed guarantees.
 

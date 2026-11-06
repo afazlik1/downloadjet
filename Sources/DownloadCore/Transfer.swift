@@ -47,7 +47,10 @@ private final class Request: NSObject, URLSessionDownloadDelegate, @unchecked Se
     private var lastProgress: TimeInterval = 0
     private let output: URL
     private let progress: @Sendable (Int64) -> Void
-    init(output: URL, progress: @escaping @Sendable (Int64) -> Void) { self.output = output; self.progress = progress }
+    private let receivedBytes: @Sendable (Int64) -> Void
+    init(output: URL, receivedBytes: @escaping @Sendable (Int64) -> Void, progress: @escaping @Sendable (Int64) -> Void) {
+        self.output = output; self.receivedBytes = receivedBytes; self.progress = progress
+    }
     func run(_ request: URLRequest, pool: TransferSession) async throws -> (URL, HTTPURLResponse) {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -63,6 +66,7 @@ private final class Request: NSObject, URLSessionDownloadDelegate, @unchecked Se
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         let now = ProcessInfo.processInfo.systemUptime
         guard let http = downloadTask.response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return }
+        receivedBytes(bytesWritten)
         if now - lastProgress >= 0.1 || (totalBytesExpectedToWrite > 0 && totalBytesWritten >= totalBytesExpectedToWrite) {
             lastProgress = now; progress(totalBytesWritten)
         }
@@ -121,12 +125,12 @@ private struct RunningRange {
 }
 
 public enum Transfer {
-    private static func download(_ request: URLRequest, output: URL, pool: TransferSession, policy: RetryPolicy, retrying: @escaping @Sendable (Int, TimeInterval) async -> Void, progress: @escaping @Sendable (Int64) -> Void) async throws -> (URL, HTTPURLResponse) {
+    private static func download(_ request: URLRequest, output: URL, pool: TransferSession, policy: RetryPolicy, receivedBytes: @escaping @Sendable (Int64) -> Void, retrying: @escaping @Sendable (Int, TimeInterval) async -> Void, progress: @escaping @Sendable (Int64) -> Void) async throws -> (URL, HTTPURLResponse) {
         try await policy.perform(retrying: retrying) {
             // Every attempt starts with a fresh temporary file; completed chunks stay intact.
             try? FileManager.default.removeItem(at: output)
             do {
-                let result = try await Request(output: output, progress: progress).run(request, pool: pool)
+                let result = try await Request(output: output, receivedBytes: receivedBytes, progress: progress).run(request, pool: pool)
                 guard (200..<300).contains(result.1.statusCode) else {
                     throw HTTPStatusError(status: result.1.statusCode, retryAfter: result.1.value(forHTTPHeaderField: "Retry-After"))
                 }
@@ -134,7 +138,7 @@ public enum Transfer {
             } catch { try? FileManager.default.removeItem(at: output); throw error }
         }
     }
-    private static func downloadRanges(item: DownloadItem, cache: URL, ranges: [ClosedRange<Int64>], pending: [Int], pool: TransferSession, connections: Int, validator: String?, length: Int64, counter: ProgressCounter, retryPolicy: RetryPolicy, tailRecovery: TailRecoveryPolicy, phase: @escaping @Sendable (TransferPhase) async -> Void, retrying: @escaping @Sendable (Int, TimeInterval) async -> Void) async throws {
+    private static func downloadRanges(item: DownloadItem, cache: URL, ranges: [ClosedRange<Int64>], pending: [Int], pool: TransferSession, connections: Int, validator: String?, length: Int64, counter: ProgressCounter, retryPolicy: RetryPolicy, tailRecovery: TailRecoveryPolicy, receivedBytes: @escaping @Sendable (Int64) -> Void, phase: @escaping @Sendable (TransferPhase) async -> Void, retrying: @escaping @Sendable (Int, TimeInterval) async -> Void) async throws {
         let fm = FileManager.default
         let workers = min(8, max(1, connections))
         let eligibility = TailEligibility()
@@ -162,7 +166,7 @@ public enum Transfer {
                         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound)", forHTTPHeaderField: "Range")
                         request.setValue(validator, forHTTPHeaderField: "If-Range")
                         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
-                        let (file, response) = try await download(request, output: staging, pool: pool, policy: retryPolicy, retrying: { count, delay in
+                        let (file, response) = try await download(request, output: staging, pool: pool, policy: retryPolicy, receivedBytes: receivedBytes, retrying: { count, delay in
                             await eligibility.recordRetry(id)
                             await retrying(count, delay)
                         }) { bytes in
@@ -241,7 +245,7 @@ public enum Transfer {
         guard length > 0, chunkSize > 0 else { return [] }
         return stride(from: Int64(0), to: length, by: Int(chunkSize)).map { $0...min(length - 1, $0 + chunkSize - 1) }
     }
-    public static func run(item: DownloadItem, cache: URL, connections: Int = 4, tailRecovery: TailRecoveryPolicy = TailRecoveryPolicy(), phase: @escaping @Sendable (TransferPhase) async -> Void = { _ in }, retryPolicy: RetryPolicy = RetryPolicy(), retrying: @escaping @Sendable (Int, TimeInterval) async -> Void = { _, _ in }, progress: @escaping @Sendable (Int64, Int64) async -> Void) async throws {
+    public static func run(item: DownloadItem, cache: URL, connections: Int = 4, tailRecovery: TailRecoveryPolicy = TailRecoveryPolicy(), phase: @escaping @Sendable (TransferPhase) async -> Void = { _ in }, retryPolicy: RetryPolicy = RetryPolicy(), receivedBytes: @escaping @Sendable (Int64) -> Void = { _ in }, retrying: @escaping @Sendable (Int, TimeInterval) async -> Void = { _, _ in }, progress: @escaping @Sendable (Int64, Int64) async -> Void) async throws {
         let fm = FileManager.default
         await phase(.downloading)
         try fm.createDirectory(at: cache, withIntermediateDirectories: true)
@@ -286,7 +290,7 @@ public enum Transfer {
                 if size == range.upperBound - range.lowerBound + 1 { await counter.update(index, size!) }
                 else { try? fm.removeItem(at: path); pending.append(index) }
             }
-            try await downloadRanges(item: item, cache: cache, ranges: ranges, pending: pending, pool: pool, connections: connections, validator: validator, length: length, counter: counter, retryPolicy: retryPolicy, tailRecovery: tailRecovery, phase: phase, retrying: retrying)
+            try await downloadRanges(item: item, cache: cache, ranges: ranges, pending: pending, pool: pool, connections: connections, validator: validator, length: length, counter: counter, retryPolicy: retryPolicy, tailRecovery: tailRecovery, receivedBytes: receivedBytes, phase: phase, retrying: retrying)
             try Task.checkCancellation()
             await phase(.assembling)
             let assembled = item.directory.appendingPathComponent(".downloadjet-\(item.id).tmp")
@@ -307,7 +311,7 @@ public enum Transfer {
             let staging = item.directory.appendingPathComponent(".downloadjet-\(item.id).tmp")
             try? fm.removeItem(at: staging)
             defer { try? fm.removeItem(at: staging) }
-            let (file, response) = try await download(URLRequest(url: item.url), output: staging, pool: pool, policy: retryPolicy, retrying: retrying) { bytes in Task { await progress(bytes, max(0, length)) } }
+            let (file, response) = try await download(URLRequest(url: item.url), output: staging, pool: pool, policy: retryPolicy, receivedBytes: receivedBytes, retrying: retrying) { bytes in Task { await progress(bytes, max(0, length)) } }
             guard (200..<300).contains(response.statusCode), response.statusCode != 206 else { throw DownloadError.invalidResponse }
             try Task.checkCancellation()
             try fm.moveItem(at: file, to: item.destination)
