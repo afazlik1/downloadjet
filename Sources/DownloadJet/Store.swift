@@ -44,7 +44,7 @@ import DownloadCore
             let timer = Timer(timeInterval: DownloadSpeedHistory.interval, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.sampleSpeed(); self?.pump() }
             }
-            timer.tolerance = 0.025
+            timer.tolerance = DownloadSpeedHistory.interval * 0.05
             RunLoop.main.add(timer, forMode: .common)
             self.timer = timer
         }

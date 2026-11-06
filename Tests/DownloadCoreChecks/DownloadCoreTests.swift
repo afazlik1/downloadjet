@@ -86,33 +86,33 @@ final class DownloadCoreTests {
     }
     func testSpeedHistory() {
         let first = UUID(), second = UUID()
-        var history = DownloadSpeedHistory(now: 100)
-        XCTAssertEqual(history.samples.count, 61)
-        XCTAssertEqual(history.samples.first?.time, 70)
+        var history = DownloadSpeedHistory(now: 0)
+        XCTAssertEqual(history.samples.count, 151)
+        XCTAssertEqual(history.samples.first?.time, -30)
         history.record(1024, for: first); history.record(2048, for: second)
         history.record(-100, for: first)
-        history.sample(at: 100.5)
-        XCTAssertEqual(history.totalSpeed, 6144)
-        XCTAssertEqual(history.speeds[first], 2048)
-        XCTAssertEqual(history.speeds[second], 4096)
-        history.sample(at: 101)
+        history.sample(at: 0.2)
+        XCTAssertEqual(history.totalSpeed, 15360)
+        XCTAssertEqual(history.speeds[first], 5120)
+        XCTAssertEqual(history.speeds[second], 10240)
+        history.sample(at: 0.4)
         XCTAssertEqual(history.totalSpeed, 0)
         XCTAssertTrue(history.speeds.isEmpty)
-        XCTAssertTrue(history.samples.contains { $0.bytesPerSecond == 6144 })
+        XCTAssertTrue(history.samples.contains { $0.bytesPerSecond == 15360 })
         history.record(1024, for: first)
-        history.sample(at: 102) // Delayed timers use real elapsed time, not a fixed divisor.
-        XCTAssertEqual(history.totalSpeed, 1024)
-        for tick in 1...70 { history.sample(at: 102 + Double(tick) * 0.5) }
-        XCTAssertEqual(history.samples.count, 61)
-        XCTAssertEqual(history.samples.first?.time, 107)
-        XCTAssertEqual(history.samples.last?.time, 137)
+        history.sample(at: 1.4) // Delayed timers use real elapsed time, not a fixed divisor.
+        XCTAssertTrue(abs(history.totalSpeed - 1024) < 0.001)
+        for tick in 8...185 { history.sample(at: Double(tick) / 5) }
+        XCTAssertEqual(history.samples.count, 151)
+        XCTAssertEqual(history.samples.first?.time, 7)
+        XCTAssertEqual(history.samples.last?.time, 37)
         XCTAssertTrue(history.samples.allSatisfy { $0.bytesPerSecond == 0 })
         history.sample(at: 200) // A long idle gap expires all old measurements.
         XCTAssertTrue(history.samples.allSatisfy { $0.time >= 170 })
         history.record(1000, for: first)
         history.sample(at: 199); history.sample(at: 200)
-        history.sample(at: 200.5)
-        XCTAssertEqual(history.totalSpeed, 2000)
+        history.sample(at: 200.2)
+        XCTAssertTrue(abs(history.totalSpeed - 5000) < 0.001)
     }
     func testRangeBoundaries() {
         XCTAssertEqual(Transfer.ranges(length: 10, chunkSize: 4), [0...3, 4...7, 8...9])
@@ -361,7 +361,7 @@ private func XCTAssertThrowsError<T>(_ expression: @autoclosure () throws -> T) 
         try suite.setUpWithError()
         defer { try? suite.tearDownWithError() }
         suite.testRangeBoundaries(); print("PASS range boundaries")
-        suite.testSpeedHistory(); print("PASS half-second speed sampling, aggregation, idle decay, and 30-second history")
+        suite.testSpeedHistory(); print("PASS 200-millisecond speed sampling, aggregation, idle decay, and 30-second history")
         try suite.testURLValidationAndFilenames(); print("PASS URL and filename validation")
         try await suite.testParallelDownloadIsByteExact(); print("PASS parallel byte integrity")
         // Give each test a fresh destination/cache while retaining the fixture server.

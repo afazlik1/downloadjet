@@ -42,7 +42,7 @@ struct SpeedHistoryView: View {
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(width: 220)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-        .help("Combined download speed over the last 30 seconds. Updated every 0.5 seconds, including retry traffic.")
+        .help("Combined download speed over the last 30 seconds. Updates five times per second and includes retry traffic.")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Live download speed, last 30 seconds")
         .accessibilityValue(bytes(Int64(speed)) + " per second")

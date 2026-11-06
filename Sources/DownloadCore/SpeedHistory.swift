@@ -9,8 +9,9 @@ public struct DownloadSpeedSample: Identifiable, Sendable {
 /// Samples received payload bytes using elapsed monotonic time, independently of
 /// cached progress, range retries, and final file assembly.
 public struct DownloadSpeedHistory: Sendable {
-    public static let interval: TimeInterval = 0.5
+    public static let interval: TimeInterval = 0.20
     public static let duration: TimeInterval = 30
+    public static let sampleLimit = Int((duration / interval).rounded()) + 1
     public private(set) var samples: [DownloadSpeedSample]
     public private(set) var speeds: [UUID: Double] = [:]
     public private(set) var totalSpeed: Double = 0
@@ -19,7 +20,7 @@ public struct DownloadSpeedHistory: Sendable {
 
     public init(now: TimeInterval) {
         previousTime = now
-        samples = (0...60).map {
+        samples = (0..<Self.sampleLimit).map {
             DownloadSpeedSample(time: now - Self.duration + Double($0) * Self.interval, bytesPerSecond: 0)
         }
     }
@@ -40,6 +41,6 @@ public struct DownloadSpeedHistory: Sendable {
         }
         samples.append(DownloadSpeedSample(time: now, bytesPerSecond: totalSpeed))
         // Bound memory even if a caller samples more frequently than the UI timer.
-        if samples.count > 61 { samples.removeFirst(samples.count - 61) }
+        if samples.count > Self.sampleLimit { samples.removeFirst(samples.count - Self.sampleLimit) }
     }
 }

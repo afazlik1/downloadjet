@@ -28,7 +28,7 @@ The app is ad-hoc signed and built for the current machine's architecture. Publi
 - Validated range boundaries and lengths, If-Range checks, and destination collision protection.
 - Bounded automatic retries for temporary network failures and HTTP 408/429/500/502/503/504, with exponential backoff and Retry-After support capped at five minutes.
 - Slow final-range recovery using an idle worker and at most one backup per range. The first fully validated copy wins; the other is cancelled. One-worker limits and requests in retry backoff are respected.
-- A compact live speed chart in the upper-right summary area shows combined network throughput for the last 30 seconds, sampled every 0.5 seconds. Retry traffic is included; cached chunks and disk assembly are excluded.
+- A compact live speed chart in the upper-right summary area shows combined network throughput for the last 30 seconds, sampled every 0.20 seconds. Retry traffic is included; cached chunks and disk assembly are excluded.
 - Batch URL entry, folder selection, per-file scheduling, categories, search, Finder reveal, native light/dark appearance, and transfer/recovery/assembly status.
 - **Download Later** saves links without starting any requests. Saved links persist across launches in the Download Later section; use **Start Download** on a row or its context menu to start one. Resume All leaves these links stopped.
 

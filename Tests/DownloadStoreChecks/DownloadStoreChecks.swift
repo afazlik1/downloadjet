@@ -58,11 +58,11 @@ import DownloadCore
         precondition(restored.totalSpeed > 0 && restored.speedHistory.last?.bytesPerSecond == restored.totalSpeed)
         precondition(restored.speeds[first.id] == restored.totalSpeed)
         let peak = restored.totalSpeed
-        try await Task.sleep(nanoseconds: 550_000_000)
+        try await Task.sleep(nanoseconds: 220_000_000)
         restored.sampleSpeed()
         precondition(restored.totalSpeed == 0 && restored.speeds.isEmpty)
         precondition(restored.speedHistory.contains { $0.bytesPerSecond == peak })
-        precondition(restored.speedHistory.count <= 61)
+        precondition(restored.speedHistory.count <= DownloadSpeedHistory.sampleLimit)
         print("PASS live network speed updates from received bytes and drops to zero while idle")
 
         restored.remove(restored.items[1].id)
