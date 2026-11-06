@@ -1,6 +1,6 @@
 import Foundation
 
-public enum DownloadStatus: String, Codable, Sendable { case queued, downloading, paused, completed, failed }
+public enum DownloadStatus: String, Codable, Sendable { case waiting, queued, downloading, paused, completed, failed }
 public struct DownloadItem: Identifiable, Codable, Sendable {
     public var id = UUID()
     public var url: URL

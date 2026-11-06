@@ -36,11 +36,11 @@ struct MainView: View {
     @ViewState<String> private var filter = "All Downloads"
     @ViewState<String> private var search = ""
     @ViewState<UUID?> private var selection = nil
-    let filters = ["All Downloads", "Downloading", "Queued", "Paused", "Completed", "Failed"]
+    let filters = ["All Downloads", "Downloading", "Download Later", "Queued", "Paused", "Completed", "Failed"]
     let categories = ["Video", "Audio", "Archives", "Documents", "Other"]
     var visible: [DownloadItem] {
         store.items.filter { item in
-            (filter == "All Downloads" || filter.lowercased() == item.status.rawValue || filter == item.category) && (search.isEmpty || item.filename.localizedCaseInsensitiveContains(search) || item.url.host?.localizedCaseInsensitiveContains(search) == true)
+            (filter == "All Downloads" || (filter == "Download Later" && item.status == .waiting) || filter.lowercased() == item.status.rawValue || filter == item.category) && (search.isEmpty || item.filename.localizedCaseInsensitiveContains(search) || item.url.host?.localizedCaseInsensitiveContains(search) == true)
         }.sorted { $0.created > $1.created }
     }
     var body: some View {
@@ -83,6 +83,7 @@ struct MainView: View {
                                 .contextMenu {
                                     if item.status == .downloading || item.status == .queued { Button("Pause") { store.pause(item.id) } }
                                     if item.status == .paused || item.status == .failed { Button("Resume") { store.resume(item.id) } }
+                                    if item.status == .waiting { Button("Start Download") { store.resume(item.id) } }
                                     if item.status == .completed { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.destination]) } }
                                     Button("Remove from List", role: .destructive) { store.remove(item.id) }.disabled(item.status == .downloading)
                                 }
@@ -115,6 +116,7 @@ struct MainView: View {
         switch name {
         case "All Downloads": return "tray.full"
         case "Downloading": return "arrow.down.circle"
+        case "Download Later": return "tray.and.arrow.down"
         case "Queued": return "clock"
         case "Paused": return "pause.circle"
         case "Completed": return "checkmark.circle"
@@ -134,7 +136,7 @@ struct DownloadRow: View {
         HStack(spacing: 16) {
             Image(nsImage: NSWorkspace.shared.icon(for: .init(filenameExtension: item.destination.pathExtension) ?? .data)).resizable().frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: 7) {
-                HStack { Text(item.filename).font(.system(size: 13, weight: .semibold)).lineLimit(1); Spacer(); Text(store.phases[item.id]?.rawValue ?? item.status.rawValue.capitalized).font(.caption).foregroundStyle(item.status == .failed ? .red : item.status == .completed ? .green : .secondary) }
+                HStack { Text(item.filename).font(.system(size: 13, weight: .semibold)).lineLimit(1); Spacer(); Text(store.phases[item.id]?.rawValue ?? (item.status == .waiting ? "Download Later" : item.status.rawValue.capitalized)).font(.caption).foregroundStyle(item.status == .failed ? .red : item.status == .completed ? .green : .secondary) }
                 if item.status == .downloading || item.status == .paused { ProgressView(value: item.progress).tint(.blue) }
                 HStack {
                     Text(item.url.host ?? "").lineLimit(1)
@@ -151,6 +153,8 @@ struct DownloadRow: View {
                 Button { store.pause(item.id) } label: { Image(systemName: "pause.fill") }.help("Pause")
             } else if item.status == .completed {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([item.destination]) } label: { Image(systemName: "folder") }.help("Show in Finder")
+            } else if item.status == .waiting {
+                Button { store.resume(item.id) } label: { Label("Start Download", systemImage: "play.fill") }.help("Start this saved download")
             } else {
                 Button { store.resume(item.id) } label: { Image(systemName: "play.fill") }.help("Resume")
             }
@@ -181,18 +185,25 @@ struct AddDownloadView: View {
             }
             Toggle("Schedule for later", isOn: $schedule)
             if schedule { DatePicker("Start at", selection: $date, in: Date()...) }
+            Text("Download Later saves links without starting them or setting a time. Choose Start Download in the list when you’re ready.").font(.caption).foregroundStyle(.secondary)
             Text("Completed chunks are kept when paused. Servers without safe range support restart on resume. Scheduled downloads run while DownloadJet is open and your Mac is awake.").font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).font(.caption) }
             HStack {
                 Button("Paste Links") { if let value = NSPasteboard.general.string(forType: .string) { text = value } }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(schedule ? "Schedule" : "Download") {
-                    do { try store.add(text: text, directory: directory ?? store.defaultDirectory, scheduled: schedule ? date : nil); dismiss() }
-                    catch { self.error = error.localizedDescription }
-                }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("Download Later") { addDownload(later: true) }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(schedule ? "Schedule" : "Download Now") { addDownload(later: false) }
+                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }.padding(28).frame(width: 540)
+    }
+    private func addDownload(later: Bool) {
+        do {
+            try store.add(text: text, directory: directory ?? store.defaultDirectory, scheduled: schedule ? date : nil, downloadLater: later)
+            dismiss()
+        } catch { self.error = error.localizedDescription }
     }
 }
 

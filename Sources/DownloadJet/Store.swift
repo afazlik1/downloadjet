@@ -20,8 +20,7 @@ import DownloadCore
     private var storageReady = false
     let support: URL
     var defaultDirectory: URL { FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0] }
-    init() {
-        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    init(applicationSupport: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0], automaticallySchedule: Bool = true) {
         support = AppStorage.directory(in: applicationSupport)
         do {
             try AppStorage.prepare(in: applicationSupport)
@@ -37,7 +36,9 @@ import DownloadCore
             }
             storageReady = true
         } catch { message = "Could not load saved queue: \(error.localizedDescription)" }
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Task { @MainActor in self?.pump() } }
+        if automaticallySchedule {
+            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Task { @MainActor in self?.pump() } }
+        }
     }
     private func savePreferences() {
         guard storageReady else { return }
@@ -53,11 +54,12 @@ import DownloadCore
         do { try JSONEncoder().encode(items).write(to: support.appendingPathComponent("queue.json"), options: .atomic) }
         catch { message = "Could not save queue: \(error.localizedDescription)" }
     }
-    func add(text: String, directory: URL, scheduled: Date?) throws {
+    func add(text: String, directory: URL, scheduled: Date?, downloadLater: Bool = false) throws {
         guard storageReady else { throw StorageError.unavailable }
         let urls = try DownloadItem.parseURLs(text)
         for url in urls {
-            var item = DownloadItem(url: url, directory: directory, scheduled: scheduled)
+            var item = DownloadItem(url: url, directory: directory, scheduled: downloadLater ? nil : scheduled)
+            if downloadLater { item.status = .waiting }
             let base = item.destination.deletingPathExtension().lastPathComponent
             let ext = item.destination.pathExtension
             var number = 2
